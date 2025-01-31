@@ -1,0 +1,41 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+f = 1
+while f > 0 {
+    rcv a
+    for i in 126..0
+        rcv b
+        if a >= b
+          snd a
+          a=b
+          f=0
+          
+          
+          
+        else
+          snd b
+          f=1
+
+    snd a
+}

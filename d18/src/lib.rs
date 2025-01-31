@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
 use std::thread;
 use std::time;
@@ -65,6 +67,12 @@ fn prgrm(
     rcv: Receiver<isize>,
     rsend: Sender<isize>,
 ) {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(p.to_string())
+        .unwrap();
     let prg: Vec<Vec<&str>> = input.lines().map(|l| l.split(' ').collect()).collect();
     let mut ip: isize = 0;
     let mut regs = HashMap::new();
@@ -73,10 +81,14 @@ fn prgrm(
         let instr = &prg[ip as usize];
         match instr[0] {
             "snd" => {
-                let _ = snd.send(get(instr[1], &regs));
-                if p == 1 {
-                    let _ = rsend.send(1);
+                let to_send = get(instr[1], &regs);
+                println!("{} sends: {}", p, to_send);
+                let _ = writeln!(&mut file, "{}", to_send.to_string());
+                if ip == 38 {
+                    let _ = writeln!(&mut file, "");
                 }
+                let _ = snd.send(to_send);
+                let _ = rsend.send(p + 1);
             }
             "set" => {
                 *regs.entry(instr[1]).or_default() = get(instr[2], &regs);
@@ -91,25 +103,41 @@ fn prgrm(
                 *regs.entry(instr[1]).or_default() %= get(instr[2], &regs);
             }
             "rcv" => {
-                *regs.entry(instr[1]).or_default() = rcv.recv().unwrap();
+                if p == 0 {
+                    let _ = rsend.send(-2);
+                } else {
+                    let _ = rsend.send(-1);
+                }
+                println!("{}: trying to recveive", p);
+                let to_recv = rcv.recv().unwrap();
+                println!("{} recvs: {}", p, to_recv);
+                *regs.entry(instr[1]).or_default() = to_recv;
             }
             "jgz" => {
-                if *regs.entry(instr[1]).or_default() > 0 {
+                //had a very fun bug here:
+                //
+                // if *regs.entry(instr[1]).or_default() > 0 {
+                //
+                // which does not work because there is also a jgz 1 3 !
+                // this amazingly passes part 1 and then makes the queue grow to infinity!
+                //
+                if get(instr[1], &regs) > 0 {
                     ip += get(instr[2], &regs);
                     continue;
                 }
             }
             _ => panic!(),
         }
-        ip += 1
+        ip += 1;
     }
     println!("Done");
 }
 
 fn part2(input: String) -> isize {
     //200796272
-    let (s0, r1) = sync_channel(200000000);
-    let (s1, r0) = sync_channel(200000000);
+    //16003 too high
+    let (s0, r1) = sync_channel(10000);
+    let (s1, r0) = sync_channel(10000);
     let (sres, rres) = channel();
     let sres2 = sres.clone();
     let i0 = input.clone();
@@ -123,10 +151,14 @@ fn part2(input: String) -> isize {
     let mut res = 0;
     loop {
         thread::sleep(time::Duration::from_millis(1000));
-        while let Ok(_) = rres.try_recv() {
-            res += 1;
+        while let Ok(msg) = rres.try_recv() {
+            match msg {
+                2 => res += 1,
+                1 | -1 | -2 => (),
+                _ => panic!(),
+            }
         }
-        println!("res : {:?}", res);
+        println!("1: {}", res);
     }
 
     let _ = t0.join();
