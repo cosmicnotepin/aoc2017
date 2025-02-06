@@ -1,0 +1,32 @@
+set b 99                                                        
+set c b                                                             
+jnz a 2         -|                                                  
+jnz 1 5          | -|                                                
+mul b 100       <|  |                                                 
+sub b -100000       |                                                     
+set c b             |                                               
+                    |
+                    |                                                    
+b = 109900          |
+c = 126900          |
+loop {
+    f = 1                                                       
+    d = 2                                                         
+    while d != b {
+        e = 2                                                        
+        while e!=b {                                                 
+            if d*e == b                                               
+                f = 0                                               
+            e += 1                                                    
+        }                                                              
+        d +=1                                                         
+    }                                                              
+    if f==0                                                   
+        h +=1                                                 
+                                                                  
+    if b == c                                                 
+        break                                                     
+    
+    b += 17                                                          
+}                                                                    
+                
