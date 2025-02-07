@@ -1,7 +1,9 @@
-use ndarray::{arr2, s, Array2, Axis};
+use ndarray::{arr2, s, Array2, ArrayView2, Axis};
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::time::Instant;
 
 fn flipped_horiz(pat: &Array2<char>) -> Array2<char> {
@@ -27,14 +29,66 @@ fn to_array2(s: &str) -> Array2<char> {
     }
 }
 
+pub trait Key {
+    fn key<'a>(&'a self) -> ArrayView2<'a, char>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+struct Array2Key {
+    s: Array2<char>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+struct ArrayView2Key<'a> {
+    s: ArrayView2<'a, char>,
+}
+
+impl<'b> Key for Array2Key {
+    fn key<'a>(&'a self) -> ArrayView2<'a, char> {
+        self.s.slice(s![.., ..])
+    }
+}
+
+impl<'b> Key for ArrayView2Key<'b> {
+    fn <'a: 'b>key(&'a self) -> ArrayView2<'a, char> {
+        self.s
+    }
+}
+
+impl<'a> Borrow<dyn Key<'a> + 'a> for Array2Key {
+    fn borrow<'b>(&'b self) -> &'b (dyn Key<'a> + 'a) {
+        // This is a simple coercion from the concrete type to a trait object.
+        self
+    }
+}
+
+impl<'a> Hash for (dyn Key<'a>) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key().hash(state)
+    }
+}
+
+impl<'a> PartialEq for (dyn Key<'a> + 'a) {
+    fn eq(&self, other: &Self) -> bool {
+        self.key().eq(&other.key())
+    }
+}
+
+impl<'a> Eq for (dyn Key<'a> + 'a) {}
+
 fn part1(input: String, iters: usize) -> usize {
-    let mut rules: HashMap<Array2<char>, Array2<char>> = HashMap::new();
+    let mut rules: HashMap<Array2Key, Array2<char>> = HashMap::new();
     for l in input.lines() {
         let (from_s, to_s) = l.split_once(" => ").unwrap();
         let (mut from, to) = (to_array2(from_s), to_array2(to_s));
         for _ in 0..4 {
-            rules.insert(from.clone(), to.clone());
-            rules.insert(flipped_horiz(&from), to.clone());
+            rules.insert(Array2Key { s: from.clone() }, to.clone());
+            rules.insert(
+                Array2Key {
+                    s: flipped_horiz(&from),
+                },
+                to.clone(),
+            );
             from = rot90(&from);
         }
     }
@@ -56,10 +110,8 @@ fn part1(input: String, iters: usize) -> usize {
         let mut new_art = Array2::from_elem((new_size, new_size), '.');
         for r in 0..divs {
             for c in 0..divs {
-                let to_get = art
-                    .slice(s![r * div..(r + 1) * div, c * div..(c + 1) * div])
-                    .to_owned();
-                let to = rules.get(&to_get);
+                let to_get = art.slice(s![r * div..(r + 1) * div, c * div..(c + 1) * div]);
+                let to = rules.get(&ArrayView2Key { s: to_get } as &dyn Key);
                 new_art
                     .slice_mut(s![
                         r * new_div..(r + 1) * new_div,
